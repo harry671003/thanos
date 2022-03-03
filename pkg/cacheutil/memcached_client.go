@@ -25,6 +25,7 @@ import (
 	"github.com/thanos-io/thanos/pkg/extprom"
 	"github.com/thanos-io/thanos/pkg/gate"
 	"github.com/thanos-io/thanos/pkg/model"
+	"github.com/thanos-io/thanos/pkg/tls"
 )
 
 const (
@@ -56,6 +57,12 @@ var (
 		MaxGetMultiBatchSize:      0,
 		DNSProviderUpdateInterval: 10 * time.Second,
 		AutoDiscovery:             false,
+		TlsEnabled:                false,
+		TLSCertPath:               "",
+		TLSKeyPath:                "",
+		TLSCAPath:                 "",
+		TLSServerName:             "",
+		TLSInsecureSkipVerify:     false,
 	}
 )
 
@@ -128,6 +135,29 @@ type MemcachedClientConfig struct {
 
 	// AutoDiscovery configures memached client to perform auto-discovery instead of DNS resolution
 	AutoDiscovery bool `yaml:"auto_discovery"`
+
+	// Enable TLS in the memcached client. This flag needs to be enabled when any
+	// other TLS flag is set. If set to false, insecure connection to memcached server
+	// will be used.
+	TlsEnabled bool `yaml:"tls_enabled"`
+
+	// Path to the client certificate file, which will be used for authenticating
+	// with the server. Also requires the key path to be configured.
+	TLSCertPath string `yaml:"tls_cert_path"`
+
+	// Path to the key file for the client certificate. Also requires the client
+	// certificate to be configured.
+	TLSKeyPath string `yaml:"tls_key_path"`
+
+	// Path to the CA certificates file to validate server certificate against.
+	// If not set, the host's root CA certificates are used.
+	TLSCAPath string `yaml:"tls_ca_path"`
+
+	// Override the expected name on the server certificate.
+	TLSServerName string `yaml:"tls_ca_name"`
+
+	// Skip validating server certificate.
+	TLSInsecureSkipVerify bool `yaml:"tls_insecure_skip_verify"`
 }
 
 func (c *MemcachedClientConfig) validate() error {
@@ -225,7 +255,17 @@ func NewMemcachedClientWithConfig(logger log.Logger, name string, config Memcach
 	// for servers selection.
 	selector := &MemcachedJumpHashSelector{}
 
-	client := memcache.NewFromSelector(selector)
+	var client *memcache.Client
+	if config.TlsEnabled {
+		tlsConfig, err := tls.NewClientConfig(logger, config.TLSCertPath, config.TLSCertPath, config.TLSCAPath, config.TLSServerName, config.TLSInsecureSkipVerify)
+		if err != nil {
+			return nil, err
+		}
+		client = memcache.NewWithTLSFromSelector(tlsConfig, selector)
+	} else {
+		client = memcache.NewFromSelector(selector)
+	}
+
 	client.Timeout = config.Timeout
 	client.MaxIdleConns = config.MaxIdleConnections
 
