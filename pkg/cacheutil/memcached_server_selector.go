@@ -102,3 +102,40 @@ func (s *MemcachedJumpHashSelector) PickServer(key string) (net.Addr, error) {
 func (s *MemcachedJumpHashSelector) Each(f func(net.Addr) error) error {
 	return s.servers.Each(f)
 }
+
+func (s *MemcachedJumpHashSelector) PickServerForKeys(keys []string) (map[string][]string, error) {
+	addrs := *(addrsPool.Get().(*[]net.Addr))
+	err := s.servers.Each(func(addr net.Addr) error {
+		addrs = append(addrs, addr)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		addrs = (addrs)[:0]
+		addrsPool.Put(&addrs)
+	}()
+	// No need of a jump hash in case of 0 or 1 servers.
+	if len(addrs) == 0 {
+		return nil, memcache.ErrNoServers
+	}
+
+	m := make(map[string][]string, len(addrs))
+	if len(addrs) == 1 {
+		m[addrs[0].String()] = keys
+		return m, nil
+	}
+
+	for _, key := range keys {
+		// Pick a server using the jump hash.
+		cs := xxhash.Sum64String(key)
+		idx := jumpHash(cs, len(addrs))
+		picked := (addrs)[idx]
+		m[picked.String()] = append(m[picked.String()], key)
+	}
+
+	return m, nil
+}

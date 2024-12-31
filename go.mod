@@ -281,4 +281,6 @@ replace (
 
 	// Overriding to use latest commit.
 	gopkg.in/alecthomas/kingpin.v2 => github.com/alecthomas/kingpin v1.3.8-0.20210301060133-17f40c25f497
+
+	zenhack.net/go/util => github.com/zenhack/go-util v0.0.0-20231005031245-66f5419c2aea
 )

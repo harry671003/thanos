@@ -102,6 +102,8 @@ type updatableServerSelector interface {
 	// resolve. No attempt is made to connect to the server. If any
 	// error occurs, no changes are made to the internal server list.
 	SetServers(servers ...string) error
+
+	PickServerForKeys(keys []string) (map[string][]string, error)
 }
 
 // MemcachedClientConfig is the config accepted by RemoteCacheClient.
@@ -571,17 +573,9 @@ func (c *memcachedClient) getMultiSingle(ctx context.Context, keys []string) (it
 // *except* that keys sharded to the same server will be together. The order of keys
 // returned may change from call to call.
 func (c *memcachedClient) sortKeysByServer(keys []string) []string {
-	bucketed := make(map[string][]string)
-
-	for _, key := range keys {
-		addr, err := c.selector.PickServer(key)
-		// If we couldn't determine the correct server, return keys in existing order
-		if err != nil {
-			return keys
-		}
-
-		addrString := addr.String()
-		bucketed[addrString] = append(bucketed[addrString], key)
+	bucketed, err := c.selector.PickServerForKeys(keys)
+	if err != nil {
+		return keys
 	}
 
 	var out []string

@@ -496,6 +496,12 @@ type mockServerSelector struct {
 	serversByKey map[string]mockAddr
 }
 
+func (s *mockServerSelector) GetAddrsForKeys(keys []string) map[string][]string {
+	m := make(map[string][]string)
+	m["a"] = keys
+	return m
+}
+
 func (m *mockServerSelector) PickServer(key string) (net.Addr, error) {
 	if srv, ok := m.serversByKey[key]; ok {
 		return srv, nil
